@@ -35,6 +35,7 @@ CREATE TABLE propositions (
   solution TEXT NOT NULL,
   impact TEXT,
   statut TEXT NOT NULL DEFAULT 'reçue' CHECK (statut IN ('reçue', 'en_analyse', 'retenue', 'en_cours_execution')),
+  reponse_officielle TEXT,
   cree_le TIMESTAMPTZ DEFAULT now(),
   CONSTRAINT proposition_entite CHECK (ministere_id IS NOT NULL OR province_id IS NOT NULL)
 );
@@ -75,3 +76,6 @@ CREATE INDEX idx_propositions_statut ON propositions(statut);
 CREATE INDEX idx_votes_proposition ON votes(proposition_id);
 CREATE INDEX idx_commentaires_proposition ON commentaires(proposition_id);
 CREATE INDEX idx_resultats_moderation_proposition ON resultats_moderation(proposition_id);
+
+-- Si la table propositions existait déjà sans reponse_officielle, exécuter :
+-- ALTER TABLE propositions ADD COLUMN IF NOT EXISTS reponse_officielle TEXT;
