@@ -48,6 +48,23 @@ router.patch('/:id/publish', requireAuth, requireRole('admin', 'responsable_mini
   }
 });
 
+/** DELETE /admin/proposals/:id — supprimer une proposition (admin / responsable_ministere) */
+router.delete('/:id', requireAuth, requireRole('admin', 'responsable_ministere'), async (req, res) => {
+  try {
+    const { data, error } = await supabase
+      .from(TABLE)
+      .delete()
+      .eq('id', req.params.id)
+      .select()
+      .single();
+    if (error) return res.status(500).json({ error: error.message });
+    if (!data) return res.status(404).json({ error: 'Proposition introuvable' });
+    return res.json({ deleted: true, id: req.params.id });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
 /** PATCH /admin/proposals/:id/status */
 router.patch('/:id/status', requireAuth, requireRole('admin', 'responsable_ministere'), async (req, res) => {
   try {

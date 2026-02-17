@@ -22,9 +22,10 @@ router.get('/', async (req, res) => {
 
     if (mes_en_attente === '1' && req.headers.authorization?.startsWith('Bearer ')) {
       try {
+        const { JWT_SECRET } = require('../middleware/auth');
         const jwt = require('jsonwebtoken');
         const token = req.headers.authorization.slice(7);
-        const payload = jwt.verify(token, process.env.JWT_SECRET || 'secret-dev-civic-drc');
+        const payload = jwt.verify(token, JWT_SECRET);
         query = query.eq('utilisateur_id', payload.id).is('reponse_officielle', null);
       } catch (_) {
         return res.status(401).json({ error: 'Token invalide pour mes_en_attente' });
@@ -261,6 +262,62 @@ byIdRouter.get('/', async (req, res) => {
       if (error.code === 'PGRST116') return res.status(404).json({ error: 'Proposition introuvable' });
       return res.status(500).json({ error: error.message });
     }
+    return res.json(data);
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+/** DELETE /proposals/:id — supprimer sa propre proposition (citoyen) */
+byIdRouter.delete('/', requireAuth, async (req, res) => {
+  try {
+    const { data: prop, error: fetchErr } = await supabase
+      .from(TABLE)
+      .select('id, utilisateur_id')
+      .eq('id', req.params.id)
+      .single();
+    if (fetchErr || !prop) return res.status(404).json({ error: 'Proposition introuvable' });
+    if (String(prop.utilisateur_id) !== String(req.user.id)) {
+      return res.status(403).json({ error: 'Vous ne pouvez supprimer que vos propres propositions' });
+    }
+    const { error: delErr } = await supabase.from(TABLE).delete().eq('id', req.params.id);
+    if (delErr) return res.status(500).json({ error: delErr.message });
+    return res.json({ deleted: true, id: req.params.id });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+/** PATCH /proposals/:id — modifier sa propre proposition (citoyen, sans réponse officielle) */
+byIdRouter.patch('/', requireAuth, async (req, res) => {
+  try {
+    const { data: prop, error: fetchErr } = await supabase
+      .from(TABLE)
+      .select('id, utilisateur_id, reponse_officielle')
+      .eq('id', req.params.id)
+      .single();
+    if (fetchErr || !prop) return res.status(404).json({ error: 'Proposition introuvable' });
+    if (String(prop.utilisateur_id) !== String(req.user.id)) {
+      return res.status(403).json({ error: 'Vous ne pouvez modifier que vos propres propositions' });
+    }
+    if (prop.reponse_officielle != null && prop.reponse_officielle.trim() !== '') {
+      return res.status(400).json({ error: 'Une proposition ayant déjà une réponse officielle ne peut plus être modifiée' });
+    }
+    const { probleme, solution, impact } = req.body;
+    const updates = {};
+    if (typeof probleme === 'string') updates.probleme = probleme.trim();
+    if (typeof solution === 'string') updates.solution = solution.trim();
+    if (impact !== undefined) updates.impact = impact === null || impact === '' ? null : String(impact).trim();
+    if (Object.keys(updates).length === 0) {
+      return res.status(400).json({ error: 'Aucune modification fournie (probleme, solution, impact)' });
+    }
+    const { data, error } = await supabase
+      .from(TABLE)
+      .update(updates)
+      .eq('id', req.params.id)
+      .select()
+      .single();
+    if (error) return res.status(500).json({ error: error.message });
     return res.json(data);
   } catch (err) {
     return res.status(500).json({ error: err.message });

@@ -8,12 +8,13 @@ import {
   patchAdminProposalStatus,
   patchAdminProposalPublish,
   postAdminProposalResponse,
+  deleteAdminProposal,
   type ApiProposition,
   type AdminStats,
 } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { ArrowLeft, BarChart3, AlertTriangle } from "lucide-react";
+import { ArrowLeft, BarChart3, AlertTriangle, Trash2 } from "lucide-react";
 
 const STATUT_OPTIONS = [
   { value: "reçue", label: "Reçue" },
@@ -33,6 +34,7 @@ const AdminProposals = () => {
   const [responseById, setResponseById] = useState<Record<string, string>>({});
   const [stats, setStats] = useState<AdminStats | null>(null);
   const [publishingId, setPublishingId] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const isAllowed = currentUser?.role === "admin" || currentUser?.role === "ministry";
 
@@ -105,6 +107,19 @@ const AdminProposals = () => {
       console.error(err);
     } finally {
       setPublishingId(null);
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    if (!token || !window.confirm("Supprimer définitivement cette proposition ?")) return;
+    setDeletingId(id);
+    try {
+      await deleteAdminProposal(id, token);
+      await fetchProposals();
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setDeletingId(null);
     }
   };
 
@@ -303,12 +318,25 @@ const AdminProposals = () => {
                   </div>
                 </div>
 
-                <Link
-                  to={`/propositions/${p.id}`}
-                  className="mt-4 inline-block text-sm font-medium text-primary hover:underline"
-                >
-                  Voir la proposition en détail
-                </Link>
+                <div className="mt-4 flex flex-wrap items-center gap-3">
+                  <Link
+                    to={`/propositions/${p.id}`}
+                    className="text-sm font-medium text-primary hover:underline"
+                  >
+                    Voir la proposition en détail
+                  </Link>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="text-civic-red border-civic-red/50 hover:bg-civic-red-light"
+                    disabled={deletingId === p.id}
+                    onClick={() => handleDelete(p.id)}
+                  >
+                    <Trash2 className="h-4 w-4 mr-1" />
+                    {deletingId === p.id ? "Suppression…" : "Supprimer"}
+                  </Button>
+                </div>
               </div>
             ))}
           </div>

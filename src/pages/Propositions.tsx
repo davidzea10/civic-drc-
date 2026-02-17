@@ -1,5 +1,5 @@
 import Layout from "@/components/Layout";
-import { ThumbsUp, ThumbsDown, MessageSquare, Filter, Search, Plus, X, Upload } from "lucide-react";
+import { ThumbsUp, ThumbsDown, MessageSquare, Filter, Search, Plus, X, Upload, Pencil, Trash2 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useSearchParams, useNavigate, Link } from "react-router-dom";
 import {
@@ -14,7 +14,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import MessagesModal from "@/components/MessagesModal";
-import { getProposals, getMinistries, getProvinces, postProposal, type ApiProposition, type ApiMinistry, type ApiProvince } from "@/lib/api";
+import { getProposals, getMinistries, getProvinces, postProposal, patchProposal, deleteProposal, type ApiProposition, type ApiMinistry, type ApiProvince } from "@/lib/api";
 import { useAuth } from "@/contexts/AuthContext";
 
 interface Proposal {
@@ -22,6 +22,7 @@ interface Proposal {
   title: string;
   problem: string;
   solution: string;
+  impact?: string;
   ministry: string;
   province: string;
   author: string;
@@ -58,6 +59,7 @@ function mapApiToProposal(api: ApiProposition): Proposal {
     title: api.probleme.slice(0, 80) + (api.probleme.length > 80 ? "…" : ""),
     problem: api.probleme,
     solution: api.solution,
+    impact: api.impact ?? "",
     ministry: api.ministeres?.nom ?? "—",
     province: api.provinces?.nom ?? "—",
     author: api.utilisateurs?.nom ?? "Citoyen",
@@ -94,6 +96,10 @@ const Propositions = () => {
     proposalId: number | string;
     proposalTitle: string;
   }>({ isOpen: false, proposalId: 0, proposalTitle: "" });
+  const [editProposal, setEditProposal] = useState<Proposal | null>(null);
+  const [editForm, setEditForm] = useState({ problem: "", solution: "", impact: "" });
+  const [editSubmitting, setEditSubmitting] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | number | null>(null);
 
   const [formData, setFormData] = useState({
     problem: "",
@@ -125,17 +131,21 @@ const Propositions = () => {
     getProvinces().then(setProvinces).catch(() => setProvinces([]));
   }, []);
 
-  // Mes propositions en attente (sans réponse officielle) — citoyen connecté
-  useEffect(() => {
-    if (!token || !currentUser) {
-      setProposalsEnAttente([]);
-      return;
-    }
+  const refetchEnAttente = () => {
+    if (!token) return;
     setLoadingEnAttente(true);
     getProposals({ mes_en_attente: true }, token)
       .then((data) => setProposalsEnAttente((data || []).map(mapApiToProposal)))
       .catch(() => setProposalsEnAttente([]))
       .finally(() => setLoadingEnAttente(false));
+  };
+
+  useEffect(() => {
+    if (!token || !currentUser) {
+      setProposalsEnAttente([]);
+      return;
+    }
+    refetchEnAttente();
   }, [token, currentUser]);
 
   useEffect(() => {
@@ -472,17 +482,99 @@ const Propositions = () => {
               ) : (
                 <ul className="space-y-2">
                   {proposalsEnAttente.map((p) => (
-                    <li key={p.id}>
+                    <li key={p.id} className="flex items-center gap-2 rounded-lg border border-border bg-card px-4 py-3">
                       <Link
                         to={`/propositions/${p.id}`}
-                        className="block rounded-lg border border-border bg-card px-4 py-3 text-sm font-medium text-foreground transition-colors hover:border-primary/30 hover:bg-primary/5"
+                        className="flex-1 min-w-0 text-sm font-medium text-foreground hover:text-primary"
                       >
                         <span className="line-clamp-1">{p.title}</span>
                         <span className="mt-1 block text-xs text-muted-foreground">{p.date}</span>
                       </Link>
+                      <div className="flex items-center gap-1 shrink-0">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setEditProposal(p);
+                            setEditForm({ problem: p.problem, solution: p.solution, impact: p.impact ?? "" });
+                          }}
+                          className="rounded-lg p-2 text-muted-foreground hover:bg-primary/10 hover:text-primary"
+                          title="Modifier"
+                        >
+                          <Pencil className="h-4 w-4" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            if (!token || !window.confirm("Supprimer cette proposition ?")) return;
+                            setDeletingId(p.id);
+                            try {
+                              await deleteProposal(String(p.id), token);
+                              refetchEnAttente();
+                            } catch (err) {
+                              console.error(err);
+                            } finally {
+                              setDeletingId(null);
+                            }
+                          }}
+                          disabled={deletingId === p.id}
+                          className="rounded-lg p-2 text-civic-red hover:bg-civic-red-light"
+                          title="Supprimer"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </div>
                     </li>
                   ))}
                 </ul>
+                {/* Modal modifier proposition */}
+                <Dialog open={!!editProposal} onOpenChange={(open) => !open && setEditProposal(null)}>
+                  <DialogContent className="sm:max-w-xl">
+                    <DialogHeader>
+                      <DialogTitle>Modifier la proposition</DialogTitle>
+                      <DialogDescription>Modifiez le problème, la solution et l&apos;impact. Les champs ministère/province ne peuvent pas être modifiés.</DialogDescription>
+                    </DialogHeader>
+                    {editProposal && (
+                      <form
+                        onSubmit={async (e) => {
+                          e.preventDefault();
+                          if (!token || !editProposal) return;
+                          setEditSubmitting(true);
+                          try {
+                            await patchProposal(String(editProposal.id), {
+                              probleme: editForm.problem.trim(),
+                              solution: editForm.solution.trim(),
+                              impact: editForm.impact.trim() || undefined,
+                            }, token);
+                            refetchEnAttente();
+                            setEditProposal(null);
+                          } catch (err) {
+                            console.error(err);
+                          } finally {
+                            setEditSubmitting(false);
+                          }
+                        }}
+                        className="space-y-4"
+                      >
+                        <div>
+                          <Label>Problème</Label>
+                          <Textarea value={editForm.problem} onChange={(e) => setEditForm((f) => ({ ...f, problem: e.target.value }))} className="mt-1 min-h-[80px]" required />
+                        </div>
+                        <div>
+                          <Label>Solution</Label>
+                          <Textarea value={editForm.solution} onChange={(e) => setEditForm((f) => ({ ...f, solution: e.target.value }))} className="mt-1 min-h-[80px]" required />
+                        </div>
+                        <div>
+                          <Label>Impact (optionnel)</Label>
+                          <Textarea value={editForm.impact} onChange={(e) => setEditForm((f) => ({ ...f, impact: e.target.value }))} className="mt-1 min-h-[60px]" />
+                        </div>
+                        <div className="flex justify-end gap-2">
+                          <Button type="button" variant="outline" onClick={() => setEditProposal(null)}>Annuler</Button>
+                          <Button type="submit" disabled={editSubmitting}>{editSubmitting ? "Enregistrement…" : "Enregistrer"}</Button>
+                        </div>
+                      </form>
+                    )}
+                  </DialogContent>
+                </Dialog>
               )}
             </div>
           )}

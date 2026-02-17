@@ -133,6 +133,20 @@ export async function getProposal(id: string): Promise<ApiPropositionDetail> {
   return request<ApiPropositionDetail>(`/proposals/${id}`);
 }
 
+/** PATCH /proposals/:id — modifier sa propre proposition (citoyen, sans réponse officielle) */
+export async function patchProposal(id: string, body: { probleme?: string; solution?: string; impact?: string }, token: string): Promise<ApiPropositionDetail> {
+  return request<ApiPropositionDetail>(`/proposals/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(body),
+    token,
+  });
+}
+
+/** DELETE /proposals/:id — supprimer sa propre proposition (citoyen) */
+export async function deleteProposal(id: string, token: string): Promise<{ deleted: boolean; id: string }> {
+  return request(`/proposals/${id}`, { method: "DELETE", token });
+}
+
 /** POST /proposals — créer une proposition (JWT requis) */
 export interface PostProposalBody {
   ministere_id?: string;
@@ -240,6 +254,11 @@ export async function patchAdminProposalPublish(id: string, token: string): Prom
     method: "PATCH",
     token,
   });
+}
+
+/** DELETE /admin/proposals/:id — supprimer une proposition (admin / responsable_ministere) */
+export async function deleteAdminProposal(id: string, token: string): Promise<{ deleted: boolean; id: string }> {
+  return request(`/admin/proposals/${id}`, { method: "DELETE", token });
 }
 
 /** GET /admin/proposals/stats — statistiques admin */
