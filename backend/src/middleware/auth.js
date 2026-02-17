@@ -1,6 +1,10 @@
 const jwt = require('jsonwebtoken');
 
-const JWT_SECRET = process.env.JWT_SECRET || 'secret-dev-civic-drc';
+const JWT_SECRET = process.env.JWT_SECRET || '';
+if (!JWT_SECRET && process.env.NODE_ENV === 'production') {
+  console.error('[auth] En production, JWT_SECRET doit être défini dans les variables d\'environnement (Render/Vercel).');
+}
+const JWT_SECRET_FINAL = JWT_SECRET || 'secret-dev-civic-drc';
 
 /**
  * Middleware : vérifie le token JWT et attache req.user (id, nom, email, role).
@@ -12,7 +16,7 @@ function requireAuth(req, res, next) {
   }
   const token = authHeader.slice(7);
   try {
-    const payload = jwt.verify(token, JWT_SECRET);
+    const payload = jwt.verify(token, JWT_SECRET_FINAL);
     req.user = payload; // { id, nom, email, role }
     next();
   } catch (err) {
@@ -35,4 +39,4 @@ function requireRole(...allowedRoles) {
   };
 }
 
-module.exports = { requireAuth, requireRole, JWT_SECRET };
+module.exports = { requireAuth, requireRole, JWT_SECRET: JWT_SECRET_FINAL };
