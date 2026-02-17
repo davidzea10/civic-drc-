@@ -1,0 +1,8 @@
+# Dépendances pour la modération IA (moderation_server.py + train_moderation.py)
+flask>=2.0
+spacy>=3.0
+scikit-learn>=1.0
+joblib>=1.0
+scipy>=1.7
+
+# Après pip install : python -m spacy download fr_core_news_sm
