@@ -11,34 +11,29 @@ import {
 } from "lucide-react";
 
 const overviewStats = [
-  { label: "Total propositions", value: "3,247", icon: FileText, change: "+12%", color: "text-civic-blue bg-civic-blue-light" },
-  { label: "Citoyens actifs", value: "12,450", icon: Users, change: "+8%", color: "text-civic-green bg-civic-green-light" },
-  { label: "Propositions acceptées", value: "892", icon: CheckCircle2, change: "+15%", color: "text-civic-green bg-civic-green-light" },
-  { label: "En attente", value: "456", icon: Clock, change: "-3%", color: "text-accent bg-civic-yellow-light" },
+  { label: "Total propositions", value: "—", icon: FileText, change: "—", color: "text-civic-blue bg-civic-blue-light" },
+  { label: "Citoyens actifs", value: "—", icon: Users, change: "—", color: "text-civic-green bg-civic-green-light" },
+  { label: "Propositions acceptées", value: "—", icon: CheckCircle2, change: "—", color: "text-civic-green bg-civic-green-light" },
+  { label: "En attente", value: "—", icon: Clock, change: "—", color: "text-accent bg-civic-yellow-light" },
 ];
 
 const topMinistries = [
-  { name: "Santé", proposals: 312, resolved: 189 },
-  { name: "Infrastructures", proposals: 256, resolved: 145 },
-  { name: "Éducation", proposals: 234, resolved: 167 },
-  { name: "Eau & Hydraulique", proposals: 201, resolved: 98 },
-  { name: "Énergie", proposals: 167, resolved: 89 },
+  { name: "Santé", proposals: 0, resolved: 0 },
+  { name: "Infrastructures", proposals: 0, resolved: 0 },
+  { name: "Éducation", proposals: 0, resolved: 0 },
+  { name: "Eau & Hydraulique", proposals: 0, resolved: 0 },
+  { name: "Énergie", proposals: 0, resolved: 0 },
 ];
 
 const topProvinces = [
-  { name: "Kinshasa", proposals: 456 },
-  { name: "Nord-Kivu", proposals: 312 },
-  { name: "Haut-Katanga", proposals: 234 },
-  { name: "Sud-Kivu", proposals: 198 },
-  { name: "Ituri", proposals: 176 },
+  { name: "Kinshasa", proposals: 0 },
+  { name: "Nord-Kivu", proposals: 0 },
+  { name: "Haut-Katanga", proposals: 0 },
+  { name: "Sud-Kivu", proposals: 0 },
+  { name: "Ituri", proposals: 0 },
 ];
 
-const recentActivity = [
-  { text: "Nouvelle proposition acceptée : Électrification rurale au Kasaï", time: "Il y a 2h" },
-  { text: "12 nouveaux citoyens inscrits depuis Goma", time: "Il y a 3h" },
-  { text: "Réponse officielle du Ministère de la Santé", time: "Il y a 5h" },
-  { text: "Proposition populaire : 500+ votes pour l'accès à l'eau", time: "Il y a 8h" },
-];
+const recentActivity: { text: string; time: string }[] = [];
 
 const Dashboard = () => {
   return (
@@ -66,9 +61,11 @@ const Dashboard = () => {
                 </div>
                 <p className="font-display text-2xl font-bold text-foreground">{stat.value}</p>
                 <p className="text-xs text-muted-foreground">{stat.label}</p>
-                <span className={`mt-1 inline-block text-xs font-medium ${stat.change.startsWith("+") ? "text-civic-green" : "text-civic-red"}`}>
-                  {stat.change} ce mois
-                </span>
+                {stat.change !== "—" && (
+                  <span className={`mt-1 inline-block text-xs font-medium ${stat.change.startsWith("+") ? "text-civic-green" : "text-civic-red"}`}>
+                    {stat.change} ce mois
+                  </span>
+                )}
               </div>
             ))}
           </div>
@@ -90,7 +87,7 @@ const Dashboard = () => {
                     <div className="mt-1 h-2 rounded-full bg-secondary">
                       <div
                         className="h-2 rounded-full bg-primary transition-all"
-                        style={{ width: `${(m.resolved / m.proposals) * 100}%` }}
+                        style={{ width: `${m.proposals ? (m.resolved / m.proposals) * 100 : 0}%` }}
                       />
                     </div>
                   </div>
@@ -126,15 +123,19 @@ const Dashboard = () => {
                 <h3 className="font-display text-lg font-semibold text-foreground">Activité récente</h3>
               </div>
               <div className="space-y-4">
-                {recentActivity.map((a, i) => (
-                  <div key={i} className="flex gap-3">
-                    <div className="mt-1 h-2 w-2 shrink-0 rounded-full bg-primary" />
-                    <div>
-                      <p className="text-sm text-foreground">{a.text}</p>
-                      <p className="text-xs text-muted-foreground">{a.time}</p>
+                {recentActivity.length === 0 ? (
+                  <p className="py-4 text-center text-sm text-muted-foreground">Aucune activité récente. Données en cours de connexion.</p>
+                ) : (
+                  recentActivity.map((a, i) => (
+                    <div key={i} className="flex gap-3">
+                      <div className="mt-1 h-2 w-2 shrink-0 rounded-full bg-primary" />
+                      <div>
+                        <p className="text-sm text-foreground">{a.text}</p>
+                        <p className="text-xs text-muted-foreground">{a.time}</p>
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  ))
+                )}
               </div>
             </div>
           </div>

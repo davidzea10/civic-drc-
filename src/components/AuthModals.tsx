@@ -27,11 +27,14 @@ const AuthModals = ({
   isRegisterOpen,
   setIsRegisterOpen,
 }: AuthModalsProps) => {
-  const { login, loginAsMinistry } = useAuth();
+  const { setAuthFromApi } = useAuth();
   const navigate = useNavigate();
   const [showPassword, setShowPassword] = useState(false);
   const [loginMode, setLoginMode] = useState<"citizen" | "ministry">("citizen");
   const [loginError, setLoginError] = useState("");
+  const [registerError, setRegisterError] = useState("");
+  const [registerLoading, setRegisterLoading] = useState(false);
+  const [loginLoading, setLoginLoading] = useState(false);
   const [loginData, setLoginData] = useState({ email: "", password: "" });
   const [registerData, setRegisterData] = useState({
     fullName: "",
@@ -46,49 +49,54 @@ const AuthModals = ({
     "Kinshasa", "Haut-Katanga", "Nord-Kivu", "Sud-Kivu", "Kasaï Central",
     "Équateur", "Tshopo", "Ituri", "Lualaba", "Kongo-Central",
     "Bas-Uele", "Haut-Uele", "Kasaï", "Kasaï Oriental", "Kwango",
-    "Kwilu", "Lomami", "Lualaba", "Mai-Ndombe", "Maniema",
+    "Kwilu", "Lomami", "Mai-Ndombe", "Maniema",
     "Mongala", "Nord-Ubangi", "Sankuru", "Sud-Ubangi", "Tanganyika", "Tshuapa",
   ];
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoginError("");
-
-    if (loginMode === "ministry") {
-      const user = loginAsMinistry(loginData.email, loginData.password);
-      if (user) {
-        setLoginData({ email: "", password: "" });
-        setIsLoginOpen(false);
-        setLoginMode("citizen");
-        navigate("/ministry-dashboard");
-      } else {
-        setLoginError("Email ou mot de passe incorrect. Vérifiez vos identifiants ministériels.");
-      }
-    } else {
-      // Citizen login
-      login({
-        name: "Citoyen Congolais",
-        email: loginData.email,
-        role: "citizen",
-      });
+    setLoginLoading(true);
+    try {
+      const res = await import("@/lib/api").then((m) => m.login(loginData));
+      setAuthFromApi(res.user, res.token);
       setLoginData({ email: "", password: "" });
       setIsLoginOpen(false);
+      setLoginMode("citizen");
+      const role = res.user.role === "responsable_ministere" ? "ministry" : res.user.role === "admin" ? "admin" : "citizen";
+      if (role === "ministry") navigate("/ministry-dashboard");
+      else navigate("/accueil");
+    } catch (err) {
+      setLoginError(err instanceof Error ? err.message : "Connexion impossible.");
+    } finally {
+      setLoginLoading(false);
     }
   };
 
-  const handleRegister = (e: React.FormEvent) => {
+  const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
+    setRegisterError("");
     if (registerData.password !== registerData.confirmPassword) {
-      alert("Les mots de passe ne correspondent pas !");
+      setRegisterError("Les mots de passe ne correspondent pas.");
       return;
     }
-    login({
-      name: registerData.fullName,
-      email: registerData.email,
-      role: "citizen",
-    });
-    setRegisterData({ fullName: "", email: "", phone: "", province: "", password: "", confirmPassword: "" });
-    setIsRegisterOpen(false);
+    setRegisterLoading(true);
+    try {
+      await import("@/lib/api").then((m) =>
+        m.register({
+          name: registerData.fullName.trim(),
+          email: registerData.email.trim(),
+          password: registerData.password,
+        })
+      );
+      setRegisterData({ fullName: "", email: "", phone: "", province: "", password: "", confirmPassword: "" });
+      setIsRegisterOpen(false);
+      setIsLoginOpen(true);
+    } catch (err) {
+      setRegisterError(err instanceof Error ? err.message : "Inscription impossible.");
+    } finally {
+      setRegisterLoading(false);
+    }
   };
 
   return (
@@ -227,13 +235,14 @@ const AuthModals = ({
 
             <button
               type="submit"
-              className={`w-full rounded-xl px-6 py-3 text-sm font-semibold shadow-sm transition-all hover:opacity-90 flex items-center justify-center gap-2 ${
+              disabled={loginLoading}
+              className={`w-full rounded-xl px-6 py-3 text-sm font-semibold shadow-sm transition-all hover:opacity-90 flex items-center justify-center gap-2 disabled:opacity-50 ${
                 loginMode === "ministry"
                   ? "bg-civic-blue text-white"
                   : "bg-primary text-primary-foreground"
               }`}
             >
-              {loginMode === "ministry" ? (
+              {loginLoading ? "Connexion..." : loginMode === "ministry" ? (
                 <>
                   <Building2 className="h-4 w-4" /> Accéder à mon ministère
                 </>
@@ -272,7 +281,7 @@ const AuthModals = ({
       </Dialog>
 
       {/* Register Modal */}
-      <Dialog open={isRegisterOpen} onOpenChange={setIsRegisterOpen}>
+      <Dialog open={isRegisterOpen} onOpenChange={(open) => { setIsRegisterOpen(open); if (!open) setRegisterError(""); }}>
         <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
           <DialogHeader className="text-center">
             <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-civic-green-light">
@@ -285,6 +294,13 @@ const AuthModals = ({
               Créez votre compte pour participer à la gouvernance de la RDC
             </DialogDescription>
           </DialogHeader>
+
+          {registerError && (
+            <div className="flex items-center gap-2 rounded-xl bg-civic-red-light p-3 text-sm text-civic-red animate-fade-in">
+              <AlertCircle className="h-4 w-4 flex-shrink-0" />
+              <span>{registerError}</span>
+            </div>
+          )}
 
           <form onSubmit={handleRegister} className="space-y-4 pt-2">
             <div className="space-y-2">
@@ -397,9 +413,10 @@ const AuthModals = ({
               </button>
               <button
                 type="submit"
-                className="rounded-xl bg-civic-green px-6 py-2.5 text-sm font-semibold text-white shadow-sm transition-all hover:opacity-90 flex items-center gap-2"
+                disabled={registerLoading}
+                className="rounded-xl bg-civic-green px-6 py-2.5 text-sm font-semibold text-white shadow-sm transition-all hover:opacity-90 flex items-center gap-2 disabled:opacity-50"
               >
-                <UserPlus className="h-4 w-4" /> Créer mon compte
+                <UserPlus className="h-4 w-4" /> {registerLoading ? "Inscription..." : "Créer mon compte"}
               </button>
             </DialogFooter>
 

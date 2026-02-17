@@ -1,4 +1,5 @@
 import { Link } from "react-router-dom";
+import { useState, useEffect } from "react";
 import Layout from "@/components/Layout";
 import {
   Building2,
@@ -16,12 +17,13 @@ import drcFlag from "@/assets/drc-flag.png";
 import heroBg from "@/assets/hero-bg.jpg";
 import presidentImg from "@/assets/president.jpg";
 import PresidentSlider from "@/components/PresidentSlider";
+import { getProposals, type ApiProposition } from "@/lib/api";
 
 const stats = [
-  { label: "Citoyens inscrits", value: "12,450+", icon: Users },
-  { label: "Propositions soumises", value: "3,200+", icon: FileText },
-  { label: "Problèmes résolus", value: "890+", icon: CheckCircle2 },
-  { label: "Ministères connectés", value: "26", icon: Building2 },
+  { label: "Citoyens inscrits", value: "—", icon: Users },
+  { label: "Propositions soumises", value: "—", icon: FileText },
+  { label: "Problèmes résolus", value: "—", icon: CheckCircle2 },
+  { label: "Ministères connectés", value: "—", icon: Building2 },
 ];
 
 const features = [
@@ -63,31 +65,24 @@ const features = [
   },
 ];
 
-const recentProposals = [
-  {
-    title: "Amélioration de l'accès à l'eau potable à Lubumbashi",
-    ministry: "Ministère des Ressources Hydrauliques",
-    status: "En cours",
-    votes: 342,
-    comments: 56,
-  },
-  {
-    title: "Réhabilitation des routes nationales RN1 et RN4",
-    ministry: "Ministère des Infrastructures",
-    status: "Acceptée",
-    votes: 891,
-    comments: 123,
-  },
-  {
-    title: "Programme de bourses pour les étudiants du Sud-Kivu",
-    ministry: "Ministère de l'Éducation",
-    status: "En attente",
-    votes: 215,
-    comments: 38,
-  },
-];
+const statutLabel: Record<string, string> = {
+  reçue: "En attente",
+  en_analyse: "En analyse",
+  retenue: "Acceptée",
+  en_cours_execution: "En cours",
+};
 
 const Index = () => {
+  const [recentProposals, setRecentProposals] = useState<ApiProposition[]>([]);
+  const [loadingProposals, setLoadingProposals] = useState(true);
+
+  useEffect(() => {
+    getProposals({ sort: "recent", officielles: true })
+      .then((data) => setRecentProposals((data || []).slice(0, 3)))
+      .catch(() => setRecentProposals([]))
+      .finally(() => setLoadingProposals(false));
+  }, []);
+
   return (
     <Layout>
       {/* Hero Section with President Photo */}
@@ -227,36 +222,46 @@ const Index = () => {
             </Link>
           </div>
           <div className="grid gap-4 md:grid-cols-3">
-            {recentProposals.map((proposal) => (
-              <div
-                key={proposal.title}
-                className="rounded-2xl border border-border bg-card p-6 transition-all duration-300 hover:-translate-y-1 civic-card-shadow"
-              >
-                <span
-                  className={`mb-3 inline-block rounded-full px-3 py-1 text-xs font-semibold ${
-                    proposal.status === "Acceptée"
-                      ? "bg-civic-green-light text-civic-green"
-                      : proposal.status === "En cours"
-                      ? "bg-civic-blue-light text-civic-blue"
-                      : "bg-civic-yellow-light text-accent-foreground"
-                  }`}
+            {loadingProposals ? (
+              <p className="col-span-full py-8 text-center text-sm text-muted-foreground">Chargement des propositions…</p>
+            ) : recentProposals.length === 0 ? (
+              <p className="col-span-full rounded-2xl border border-border bg-card p-8 text-center text-muted-foreground">
+                Aucune proposition pour le moment. Les données sont chargées depuis la plateforme.
+              </p>
+            ) : (
+              recentProposals.map((proposal) => (
+                <div
+                  key={proposal.id}
+                  className="rounded-2xl border border-border bg-card p-6 transition-all duration-300 hover:-translate-y-1 civic-card-shadow"
                 >
-                  {proposal.status}
-                </span>
-                <h3 className="mb-2 font-display text-base font-semibold leading-snug text-foreground">
-                  {proposal.title}
-                </h3>
-                <p className="mb-4 text-xs text-muted-foreground">{proposal.ministry}</p>
-                <div className="flex items-center gap-4 text-xs text-muted-foreground">
-                  <span className="flex items-center gap-1">
-                    <ThumbsUp className="h-3.5 w-3.5" /> {proposal.votes}
+                  <span
+                    className={`mb-3 inline-block rounded-full px-3 py-1 text-xs font-semibold ${
+                      proposal.statut === "retenue"
+                        ? "bg-civic-green-light text-civic-green"
+                        : proposal.statut === "en_cours_execution" || proposal.statut === "en_analyse"
+                        ? "bg-civic-blue-light text-civic-blue"
+                        : "bg-civic-yellow-light text-accent-foreground"
+                    }`}
+                  >
+                    {statutLabel[proposal.statut] ?? proposal.statut}
                   </span>
-                  <span className="flex items-center gap-1">
-                    <MessageSquare className="h-3.5 w-3.5" /> {proposal.comments}
-                  </span>
+                  <h3 className="mb-2 font-display text-base font-semibold leading-snug text-foreground line-clamp-2">
+                    {proposal.probleme}
+                  </h3>
+                  <p className="mb-4 text-xs text-muted-foreground">
+                    {proposal.ministeres?.nom ?? proposal.provinces?.nom ?? "—"}
+                  </p>
+                  <div className="flex items-center gap-4 text-xs text-muted-foreground">
+                    <span className="flex items-center gap-1">
+                      <ThumbsUp className="h-3.5 w-3.5" /> —
+                    </span>
+                    <span className="flex items-center gap-1">
+                      <MessageSquare className="h-3.5 w-3.5" /> —
+                    </span>
+                  </div>
                 </div>
-              </div>
-            ))}
+              ))
+            )}
           </div>
           <Link
             to="/propositions"

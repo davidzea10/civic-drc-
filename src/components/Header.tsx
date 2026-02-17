@@ -7,7 +7,7 @@ import AdminPanel from "@/components/AdminPanel";
 import { useAuth } from "@/contexts/AuthContext";
 
 const navLinks = [
-  { label: "Accueil", path: "/" },
+  { label: "Accueil", path: "/accueil" },
   { label: "Ministères", path: "/ministeres" },
   { label: "Provinces", path: "/provinces" },
   { label: "Propositions", path: "/propositions" },
@@ -60,7 +60,7 @@ const Header = () => {
       <header className="sticky top-0 z-50 border-b border-border bg-card/95 backdrop-blur-md">
         <div className="civic-container flex h-16 items-center justify-between">
           {/* Logo */}
-          <Link to="/" className="flex items-center gap-3">
+          <Link to="/accueil" className="flex items-center gap-3">
             <img src={drcFlag} alt="Drapeau RDC" className="h-8 w-12 rounded-sm object-cover shadow-sm" />
             <span className="font-display text-xl font-bold tracking-tight text-primary">
               CIVIC-DRC
@@ -94,6 +94,19 @@ const Header = () => {
               >
                 <LayoutDashboard className="h-4 w-4" />
                 Mon Ministère
+              </Link>
+            )}
+            {/* Gérer les propositions — admin et responsable ministère */}
+            {(currentUser?.role === "admin" || currentUser?.role === "ministry") && (
+              <Link
+                to="/admin/propositions"
+                className={`rounded-lg px-3 py-2 text-sm font-medium transition-colors flex items-center gap-1.5 ${
+                  location.pathname === "/admin/propositions"
+                    ? "bg-primary/10 text-primary"
+                    : "text-muted-foreground hover:bg-secondary hover:text-foreground"
+                }`}
+              >
+                Gérer les propositions
               </Link>
             )}
           </nav>
@@ -134,15 +147,27 @@ const Header = () => {
                     </div>
 
                     {/* Ministry Dashboard link */}
-                    {currentUser.role === "ministry" && (
+{currentUser.role === "ministry" && (
+                        <button
+                          onClick={() => {
+                            navigate("/ministry-dashboard");
+                            setShowUserMenu(false);
+                          }}
+                          className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-foreground transition-colors hover:bg-secondary"
+                        >
+                          <LayoutDashboard className="h-4 w-4 text-civic-blue" /> Mon Tableau de Bord
+                        </button>
+                    )}
+
+                    {(currentUser.role === "admin" || currentUser.role === "ministry") && (
                       <button
                         onClick={() => {
-                          navigate("/ministry-dashboard");
+                          navigate("/admin/propositions");
                           setShowUserMenu(false);
                         }}
                         className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-foreground transition-colors hover:bg-secondary"
                       >
-                        <LayoutDashboard className="h-4 w-4 text-civic-blue" /> Mon Tableau de Bord
+                        Gérer les propositions
                       </button>
                     )}
 
@@ -236,6 +261,21 @@ const Header = () => {
                 </Link>
               )}
 
+              {/* Gérer les propositions — mobile */}
+              {(currentUser?.role === "admin" || currentUser?.role === "ministry") && (
+                <Link
+                  to="/admin/propositions"
+                  onClick={() => setMobileOpen(false)}
+                  className={`rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
+                    location.pathname === "/admin/propositions"
+                      ? "bg-primary/10 text-primary"
+                      : "text-muted-foreground hover:bg-secondary"
+                  }`}
+                >
+                  Gérer les propositions
+                </Link>
+              )}
+
               <div className="mt-3 border-t border-border pt-3 space-y-2">
                 {currentUser ? (
                   <>
@@ -271,6 +311,16 @@ const Header = () => {
                       >
                         <LayoutDashboard className="h-4 w-4" /> Mon Tableau de Bord
                       </button>
+                    )}
+
+                    {(currentUser.role === "admin" || currentUser.role === "ministry") && (
+                      <Link
+                        to="/admin/propositions"
+                        onClick={() => setMobileOpen(false)}
+                        className="flex w-full items-center gap-2 rounded-lg px-3 py-2.5 text-sm font-medium text-foreground transition-colors hover:bg-secondary"
+                      >
+                        Gérer les propositions
+                      </Link>
                     )}
 
                     {currentUser.role === "admin" && (

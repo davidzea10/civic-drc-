@@ -1,24 +1,19 @@
 import Layout from "@/components/Layout";
 import { MapPin, ArrowRight, FileText } from "lucide-react";
-import { useNavigate } from "react-router-dom";
-
-const provinces = [
-  { name: "Kinshasa", proposals: 456, capital: "Kinshasa" },
-  { name: "Haut-Katanga", proposals: 234, capital: "Lubumbashi" },
-  { name: "Nord-Kivu", proposals: 312, capital: "Goma" },
-  { name: "Sud-Kivu", proposals: 198, capital: "Bukavu" },
-  { name: "Kasaï Central", proposals: 87, capital: "Kananga" },
-  { name: "Équateur", proposals: 65, capital: "Mbandaka" },
-  { name: "Tshopo", proposals: 112, capital: "Kisangani" },
-  { name: "Lualaba", proposals: 143, capital: "Kolwezi" },
-  { name: "Kongo Central", proposals: 98, capital: "Matadi" },
-  { name: "Ituri", proposals: 176, capital: "Bunia" },
-  { name: "Maniema", proposals: 54, capital: "Kindu" },
-  { name: "Tanganyika", proposals: 89, capital: "Kalemie" },
-];
+import { Link } from "react-router-dom";
+import { useState, useEffect } from "react";
+import { getProvinces, type ApiProvince } from "@/lib/api";
 
 const Provinces = () => {
-  const navigate = useNavigate();
+  const [provinces, setProvinces] = useState<ApiProvince[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    getProvinces()
+      .then(setProvinces)
+      .catch(() => setProvinces([]))
+      .finally(() => setLoading(false));
+  }, []);
 
   return (
     <Layout>
@@ -32,33 +27,43 @@ const Provinces = () => {
               Provinces de la RDC
             </h1>
             <p className="mt-3 max-w-2xl text-muted-foreground">
-              Sélectionnez votre province pour soumettre des propositions à votre gouvernement provincial.
+              Sélectionnez votre province pour consulter les propositions ou en soumettre une nouvelle.
             </p>
           </div>
 
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {provinces.map((province) => (
-              <div
-                key={province.name}
-                onClick={() => navigate(`/propositions?province=${encodeURIComponent(province.name)}`)}
-                className="group flex cursor-pointer items-center gap-4 rounded-2xl border border-border bg-card p-5 transition-all duration-300 hover:-translate-y-1 civic-card-shadow hover:border-civic-green/30"
-              >
-                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-civic-green-light">
-                  <MapPin className="h-5 w-5 text-civic-green" />
-                </div>
-                <div className="flex-1">
-                  <h3 className="font-display text-sm font-semibold text-foreground group-hover:text-civic-green">
-                    {province.name}
-                  </h3>
-                  <p className="text-xs text-muted-foreground">Chef-lieu : {province.capital}</p>
-                  <div className="mt-1 flex items-center gap-1 text-xs text-muted-foreground">
-                    <FileText className="h-3 w-3" /> {province.proposals} propositions
+          {loading ? (
+            <p className="py-12 text-center text-muted-foreground">Chargement des provinces…</p>
+          ) : provinces.length === 0 ? (
+            <div className="rounded-2xl border border-border bg-card p-12 text-center text-muted-foreground">
+              Aucune province pour le moment. Les données sont chargées depuis la plateforme.
+            </div>
+          ) : (
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {provinces.map((province) => (
+                <Link
+                  key={province.id}
+                  to={`/propositions?province_id=${province.id}`}
+                  className="group flex cursor-pointer items-center gap-4 rounded-2xl border border-border bg-card p-5 transition-all duration-300 hover:-translate-y-1 civic-card-shadow hover:border-civic-green/30"
+                >
+                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-civic-green-light">
+                    <MapPin className="h-5 w-5 text-civic-green" />
                   </div>
-                </div>
-                <ArrowRight className="h-4 w-4 text-muted-foreground opacity-0 transition-all group-hover:opacity-100 group-hover:text-civic-green" />
-              </div>
-            ))}
-          </div>
+                  <div className="flex-1">
+                    <h3 className="font-display text-sm font-semibold text-foreground group-hover:text-civic-green">
+                      {province.nom}
+                    </h3>
+                    {province.gouvernement && (
+                      <p className="text-xs text-muted-foreground">{province.gouvernement}</p>
+                    )}
+                    <div className="mt-1 flex items-center gap-1 text-xs text-primary font-medium">
+                      <FileText className="h-3 w-3" /> Voir les propositions
+                    </div>
+                  </div>
+                  <ArrowRight className="h-4 w-4 shrink-0 text-muted-foreground opacity-0 transition-all group-hover:opacity-100 group-hover:text-civic-green" />
+                </Link>
+              ))}
+            </div>
+          )}
         </div>
       </section>
     </Layout>

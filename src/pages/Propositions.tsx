@@ -1,7 +1,7 @@
 import Layout from "@/components/Layout";
 import { ThumbsUp, ThumbsDown, MessageSquare, Filter, Search, Plus, X, Upload } from "lucide-react";
 import { useState, useEffect } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useSearchParams, useNavigate, Link } from "react-router-dom";
 import {
   Dialog,
   DialogContent,
@@ -14,9 +14,11 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import MessagesModal from "@/components/MessagesModal";
+import { getProposals, getMinistries, getProvinces, postProposal, type ApiProposition, type ApiMinistry, type ApiProvince } from "@/lib/api";
+import { useAuth } from "@/contexts/AuthContext";
 
 interface Proposal {
-  id: number;
+  id: number | string;
   title: string;
   problem: string;
   solution: string;
@@ -32,137 +34,127 @@ interface Proposal {
   isDisliked: boolean;
 }
 
-const initialProposals: Proposal[] = [
-  {
-    id: 1,
-    title: "Amélioration de l'accès à l'eau potable à Lubumbashi",
-    problem: "Plus de 60% de la population de Lubumbashi n'a pas accès à l'eau potable de manière régulière.",
-    solution: "Construction de 50 nouveaux forages et réhabilitation du réseau de distribution existant.",
-    ministry: "Ministère des Ressources Hydrauliques",
-    province: "Haut-Katanga",
-    author: "Jean M.",
-    status: "En cours",
-    likes: 342,
-    dislikes: 12,
-    comments: 56,
-    date: "12 Fév 2026",
-    isLiked: false,
-    isDisliked: false,
-  },
-  {
-    id: 2,
-    title: "Réhabilitation des routes nationales RN1 et RN4",
-    problem: "Les routes nationales sont dans un état de dégradation avancé, rendant le transport difficile.",
-    solution: "Lancement d'un programme de réhabilitation avec des matériaux durables et un système de maintenance.",
-    ministry: "Ministère des Infrastructures",
-    province: "Kinshasa",
-    author: "Marie K.",
-    status: "Acceptée",
-    likes: 891,
-    dislikes: 23,
-    comments: 123,
-    date: "10 Fév 2026",
-    isLiked: false,
-    isDisliked: false,
-  },
-  {
-    id: 3,
-    title: "Programme de bourses pour les étudiants du Sud-Kivu",
-    problem: "De nombreux étudiants méritants ne peuvent pas poursuivre leurs études faute de moyens financiers.",
-    solution: "Création d'un fonds provincial de bourses d'études pour 500 étudiants par an.",
-    ministry: "Ministère de l'Éducation",
-    province: "Sud-Kivu",
-    author: "Patrick B.",
-    status: "En attente",
-    likes: 215,
-    dislikes: 5,
-    comments: 38,
-    date: "8 Fév 2026",
-    isLiked: false,
-    isDisliked: false,
-  },
-  {
-    id: 4,
-    title: "Électrification rurale dans le Kasaï Central",
-    problem: "90% des zones rurales du Kasaï Central n'ont aucun accès à l'électricité.",
-    solution: "Installation de panneaux solaires communautaires dans 200 villages prioritaires.",
-    ministry: "Ministère de l'Énergie",
-    province: "Kasaï Central",
-    author: "Alice N.",
-    status: "En cours",
-    likes: 567,
-    dislikes: 8,
-    comments: 89,
-    date: "5 Fév 2026",
-    isLiked: false,
-    isDisliked: false,
-  },
-  {
-    id: 5,
-    title: "Centre de santé moderne à Goma",
-    problem: "L'hôpital général de Goma est saturé et manque d'équipements modernes.",
-    solution: "Construction d'un nouveau centre hospitalier avec équipements de pointe et formation du personnel.",
-    ministry: "Ministère de la Santé",
-    province: "Nord-Kivu",
-    author: "David L.",
-    status: "Acceptée",
-    likes: 1023,
-    dislikes: 15,
-    comments: 201,
-    date: "3 Fév 2026",
-    isLiked: false,
-    isDisliked: false,
-  },
-];
+const statutToLabel: Record<string, string> = {
+  reçue: "En attente",
+  en_analyse: "En analyse",
+  retenue: "Acceptée",
+  en_cours_execution: "En cours",
+};
 
 const statusColors: Record<string, string> = {
   "Acceptée": "bg-civic-green-light text-civic-green",
   "En cours": "bg-civic-blue-light text-civic-blue",
+  "En analyse": "bg-civic-blue-light text-civic-blue",
   "En attente": "bg-civic-yellow-light text-accent-foreground",
   "Refusée": "bg-civic-red-light text-civic-red",
 };
 
-const provinces = [
-  "Kinshasa", "Haut-Katanga", "Nord-Kivu", "Sud-Kivu", "Kasaï Central",
-  "Équateur", "Tshopo", "Ituri", "Lualaba", "Kongo-Central",
-];
-
-const ministries = [
-  "Ministère de la Santé", "Ministère de l'Éducation", "Ministère des Infrastructures",
-  "Ministère de l'Énergie", "Ministère des Ressources Hydrauliques", "Ministère de l'Agriculture",
-  "Ministère de la Justice", "Ministère de l'Intérieur",
-];
+function mapApiToProposal(api: ApiProposition): Proposal {
+  const date = api.cree_le
+    ? new Date(api.cree_le).toLocaleDateString("fr-FR", { day: "numeric", month: "short", year: "numeric" })
+    : "—";
+  return {
+    id: api.id,
+    title: api.probleme.slice(0, 80) + (api.probleme.length > 80 ? "…" : ""),
+    problem: api.probleme,
+    solution: api.solution,
+    ministry: api.ministeres?.nom ?? "—",
+    province: api.provinces?.nom ?? "—",
+    author: api.utilisateurs?.nom ?? "Citoyen",
+    status: statutToLabel[api.statut] ?? api.statut,
+    likes: 0,
+    dislikes: 0,
+    comments: 0,
+    date,
+    isLiked: false,
+    isDisliked: false,
+  };
+}
 
 const Propositions = () => {
   const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
+  const { token, currentUser } = useAuth();
   const [search, setSearch] = useState("");
   const [filterStatus, setFilterStatus] = useState("Tous");
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [proposals, setProposals] = useState<Proposal[]>(initialProposals);
-  const [likeAnimations, setLikeAnimations] = useState<Record<number, boolean>>({});
+  const [proposals, setProposals] = useState<Proposal[]>([]);
+  const [proposalsEnAttente, setProposalsEnAttente] = useState<Proposal[]>([]);
+  const [loadingProposals, setLoadingProposals] = useState(true);
+  const [loadingEnAttente, setLoadingEnAttente] = useState(false);
+  const [ministries, setMinistries] = useState<ApiMinistry[]>([]);
+  const [provinces, setProvinces] = useState<ApiProvince[]>([]);
+  const [submitError, setSubmitError] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [lastModeration, setLastModeration] = useState<{ taux: number; a_moderer: boolean } | null>(null);
+  const [createdId, setCreatedId] = useState<string | null>(null);
+  const [likeAnimations, setLikeAnimations] = useState<Record<number | string, boolean>>({});
   const [messagesModal, setMessagesModal] = useState<{
     isOpen: boolean;
-    proposalId: number;
+    proposalId: number | string;
     proposalTitle: string;
   }>({ isOpen: false, proposalId: 0, proposalTitle: "" });
 
   const [formData, setFormData] = useState({
-    title: "",
     problem: "",
     solution: "",
     impact: "",
-    keywords: "",
-    ministry: "",
-    province: "",
+    ministere_id: "",
+    province_id: "",
   });
+
+  const ministereId = searchParams.get("ministere_id") || undefined;
+  const provinceId = searchParams.get("province_id") || undefined;
+
+  // Liste publique : uniquement les propositions avec réponse officielle publiée
+  useEffect(() => {
+    setLoadingProposals(true);
+    getProposals({
+      sort: "recent",
+      ministere_id: ministereId || undefined,
+      province_id: provinceId || undefined,
+      officielles: true,
+    })
+      .then((data) => setProposals((data || []).map(mapApiToProposal)))
+      .catch(() => setProposals([]))
+      .finally(() => setLoadingProposals(false));
+  }, [ministereId, provinceId]);
+
+  useEffect(() => {
+    getMinistries().then(setMinistries).catch(() => setMinistries([]));
+    getProvinces().then(setProvinces).catch(() => setProvinces([]));
+  }, []);
+
+  // Mes propositions en attente (sans réponse officielle) — citoyen connecté
+  useEffect(() => {
+    if (!token || !currentUser) {
+      setProposalsEnAttente([]);
+      return;
+    }
+    setLoadingEnAttente(true);
+    getProposals({ mes_en_attente: true }, token)
+      .then((data) => setProposalsEnAttente((data || []).map(mapApiToProposal)))
+      .catch(() => setProposalsEnAttente([]))
+      .finally(() => setLoadingEnAttente(false));
+  }, [token, currentUser]);
 
   useEffect(() => {
     const provinceParam = searchParams.get("province");
-    if (provinceParam) {
-      setFormData((prev) => ({ ...prev, province: provinceParam }));
+    const provinceIdParam = searchParams.get("province_id");
+    if (provinceIdParam) {
+      setFormData((prev) => ({ ...prev, province_id: provinceIdParam }));
+      setIsModalOpen(true);
+    } else if (provinceParam && provinces.length) {
+      const p = provinces.find((x) => x.nom === provinceParam);
+      if (p) setFormData((prev) => ({ ...prev, province_id: p.id }));
       setIsModalOpen(true);
     }
-  }, [searchParams]);
+    const ministryIdParam = searchParams.get("ministere_id");
+    if (ministryIdParam) {
+      setFormData((prev) => ({ ...prev, ministere_id: ministryIdParam }));
+      setIsModalOpen(true);
+    }
+  }, [searchParams, provinces]);
 
   const filtered = proposals.filter((p) => {
     const matchSearch = p.title.toLowerCase().includes(search.toLowerCase());
@@ -217,31 +209,50 @@ const Propositions = () => {
     );
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const newProposal: Proposal = {
-      id: proposals.length + 1,
-      title: formData.title,
-      problem: formData.problem,
-      solution: formData.solution,
-      ministry: formData.ministry,
-      province: formData.province,
-      author: "Vous",
-      status: "En attente",
-      likes: 0,
-      dislikes: 0,
-      comments: 0,
-      date: new Date().toLocaleDateString("fr-FR", {
-        day: "numeric",
-        month: "short",
-        year: "numeric",
-      }),
-      isLiked: false,
-      isDisliked: false,
-    };
-    setProposals([newProposal, ...proposals]);
-    setFormData({ title: "", problem: "", solution: "", impact: "", keywords: "", ministry: "", province: "" });
-    setIsModalOpen(false);
+    setSubmitError("");
+    if (!currentUser || !token) {
+      setSubmitError("Vous devez être connecté pour soumettre une proposition.");
+      return;
+    }
+    if (!formData.ministere_id && !formData.province_id) {
+      setSubmitError("Choisissez un ministère ou une province.");
+      return;
+    }
+    if (!formData.problem?.trim() || !formData.solution?.trim()) {
+      setSubmitError("Le problème et la solution sont requis.");
+      return;
+    }
+    setSubmitting(true);
+    setSubmitError("");
+    setLastModeration(null);
+    setCreatedId(null);
+    try {
+      const created = await postProposal(
+        {
+          ministere_id: formData.ministere_id || undefined,
+          province_id: formData.province_id || undefined,
+          probleme: formData.problem.trim(),
+          solution: formData.solution.trim(),
+          impact: formData.impact?.trim() || undefined,
+        },
+        token
+      );
+      setFormData({ problem: "", solution: "", impact: "", ministere_id: "", province_id: "" });
+      const taux = created.taux_moderation ?? 0;
+      const aModerer = Boolean(created.a_moderer);
+      setLastModeration({ taux, a_moderer: aModerer });
+      setCreatedId(created.id);
+      if (!aModerer) {
+        setIsModalOpen(false);
+        navigate(`/propositions/${created.id}`);
+      }
+    } catch (err) {
+      setSubmitError(err instanceof Error ? err.message : "Erreur lors de l'envoi.");
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -270,7 +281,7 @@ const Propositions = () => {
             <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
               <DialogHeader>
                 <DialogTitle className="font-display text-xl font-bold text-foreground">
-                  📝 Soumettre une nouvelle proposition
+                  Soumettre une nouvelle proposition
                 </DialogTitle>
                 <DialogDescription>
                   Décrivez le problème, proposez une solution et précisez l'impact attendu. Votre voix compte !
@@ -278,22 +289,78 @@ const Propositions = () => {
               </DialogHeader>
 
               <form onSubmit={handleSubmit} className="space-y-5">
-                {/* Titre */}
-                <div className="space-y-2">
-                  <Label htmlFor="title" className="text-sm font-semibold">Titre de la proposition *</Label>
-                  <Input
-                    id="title"
-                    placeholder="Ex : Amélioration de l'accès à l'eau potable..."
-                    value={formData.title}
-                    onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                    required
-                    className="rounded-xl"
-                  />
+                {submitError && (
+                  <div className="rounded-xl bg-civic-red-light p-3 text-sm text-civic-red">
+                    {submitError}
+                  </div>
+                )}
+                {lastModeration && createdId && (
+                  <div className="rounded-xl border border-amber-500/50 bg-amber-50 dark:bg-amber-950/20 p-4 space-y-3">
+                    <p className="text-sm font-semibold text-amber-800 dark:text-amber-200">
+                      Proposition enregistrée. Score de modération IA : {lastModeration.taux}/100
+                    </p>
+                    <div className="w-full h-2 rounded-full bg-muted overflow-hidden">
+                      <div
+                        className="h-full rounded-full bg-amber-500 transition-all"
+                        style={{ width: `${Math.min(100, lastModeration.taux)}%` }}
+                      />
+                    </div>
+                    {lastModeration.a_moderer && (
+                      <p className="text-xs text-amber-700 dark:text-amber-300">
+                        Votre texte contient possiblement des propos inappropriés (injures, menaces, etc.). Il a été signalé à l&apos;administrateur qui pourra le publier ou non.
+                      </p>
+                    )}
+                    <Button
+                      type="button"
+                      onClick={() => {
+                        setIsModalOpen(false);
+                        setLastModeration(null);
+                        setCreatedId(null);
+                        navigate(`/propositions/${createdId}`);
+                      }}
+                      className="w-full"
+                    >
+                      Voir ma proposition
+                    </Button>
+                  </div>
+                )}
+
+                {/* Ministère ou Province (au moins un requis) */}
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label htmlFor="ministere_id" className="text-sm font-semibold">Ministère concerné</Label>
+                    <select
+                      id="ministere_id"
+                      value={formData.ministere_id}
+                      onChange={(e) => setFormData({ ...formData, ministere_id: e.target.value, province_id: e.target.value ? "" : formData.province_id })}
+                      className="w-full rounded-xl border border-input bg-background px-3 py-2.5 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
+                    >
+                      <option value="">Aucun</option>
+                      {ministries.map((m) => (
+                        <option key={m.id} value={m.id}>{m.nom}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="province_id" className="text-sm font-semibold">Province concernée</Label>
+                    <select
+                      id="province_id"
+                      value={formData.province_id}
+                      onChange={(e) => setFormData({ ...formData, province_id: e.target.value, ministere_id: e.target.value ? "" : formData.ministere_id })}
+                      className="w-full rounded-xl border border-input bg-background px-3 py-2.5 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
+                    >
+                      <option value="">Aucune</option>
+                      {provinces.map((p) => (
+                        <option key={p.id} value={p.id}>{p.nom}</option>
+                      ))}
+                    </select>
+                  </div>
                 </div>
+                <p className="text-xs text-muted-foreground">Choisissez un ministère ou une province.</p>
 
                 {/* Problème */}
                 <div className="space-y-2">
-                  <Label htmlFor="problem" className="text-sm font-semibold">🔴 Description du problème *</Label>
+                  <Label htmlFor="problem" className="text-sm font-semibold">Description du problème *</Label>
                   <Textarea
                     id="problem"
                     placeholder="Décrivez le problème que vous avez observé..."
@@ -306,7 +373,7 @@ const Propositions = () => {
 
                 {/* Solution */}
                 <div className="space-y-2">
-                  <Label htmlFor="solution" className="text-sm font-semibold">💡 Solution proposée *</Label>
+                  <Label htmlFor="solution" className="text-sm font-semibold">Solution proposée *</Label>
                   <Textarea
                     id="solution"
                     placeholder="Proposez une solution concrète..."
@@ -317,87 +384,33 @@ const Propositions = () => {
                   />
                 </div>
 
-                {/* Impact */}
+                {/* Impact (optionnel) */}
                 <div className="space-y-2">
-                  <Label htmlFor="impact" className="text-sm font-semibold">📊 Impact attendu *</Label>
+                  <Label htmlFor="impact" className="text-sm font-semibold">Impact attendu (optionnel)</Label>
                   <Textarea
                     id="impact"
                     placeholder="Quel impact positif cette proposition aurait-elle ?"
                     value={formData.impact}
                     onChange={(e) => setFormData({ ...formData, impact: e.target.value })}
-                    required
                     className="min-h-[80px] rounded-xl"
                   />
-                </div>
-
-                {/* Ministère & Province */}
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <div className="space-y-2">
-                    <Label htmlFor="ministry" className="text-sm font-semibold">🏛 Ministère concerné *</Label>
-                    <select
-                      id="ministry"
-                      value={formData.ministry}
-                      onChange={(e) => setFormData({ ...formData, ministry: e.target.value })}
-                      required
-                      className="w-full rounded-xl border border-input bg-background px-3 py-2.5 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
-                    >
-                      <option value="">Sélectionner...</option>
-                      {ministries.map((m) => (
-                        <option key={m} value={m}>{m}</option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="province" className="text-sm font-semibold">📍 Province *</Label>
-                    <select
-                      id="province"
-                      value={formData.province}
-                      onChange={(e) => setFormData({ ...formData, province: e.target.value })}
-                      required
-                      className="w-full rounded-xl border border-input bg-background px-3 py-2.5 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
-                    >
-                      <option value="">Sélectionner...</option>
-                      {provinces.map((p) => (
-                        <option key={p} value={p}>{p}</option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-
-                {/* Mots-clés */}
-                <div className="space-y-2">
-                  <Label htmlFor="keywords" className="text-sm font-semibold">🏷 Mots-clés</Label>
-                  <Input
-                    id="keywords"
-                    placeholder="eau, santé, éducation... (séparés par des virgules)"
-                    value={formData.keywords}
-                    onChange={(e) => setFormData({ ...formData, keywords: e.target.value })}
-                    className="rounded-xl"
-                  />
-                </div>
-
-                {/* Pièces jointes */}
-                <div className="space-y-2">
-                  <Label className="text-sm font-semibold">📎 Pièces jointes (optionnel)</Label>
-                  <div className="flex items-center gap-3 rounded-xl border-2 border-dashed border-border p-4 text-center transition-colors hover:border-primary/40">
-                    <Upload className="h-5 w-5 text-muted-foreground" />
-                    <span className="text-sm text-muted-foreground">Glissez vos fichiers ici ou cliquez pour parcourir</span>
-                  </div>
                 </div>
 
                 <DialogFooter className="gap-2 pt-2">
                   <button
                     type="button"
                     onClick={() => setIsModalOpen(false)}
-                    className="rounded-xl border border-border px-5 py-2.5 text-sm font-medium transition-colors hover:bg-muted"
+                    disabled={submitting}
+                    className="rounded-xl border border-border px-5 py-2.5 text-sm font-medium transition-colors hover:bg-muted disabled:opacity-50"
                   >
                     Annuler
                   </button>
                   <button
                     type="submit"
-                    className="rounded-xl bg-primary px-6 py-2.5 text-sm font-semibold text-primary-foreground shadow-sm transition-all hover:opacity-90"
+                    disabled={submitting}
+                    className="rounded-xl bg-primary px-6 py-2.5 text-sm font-semibold text-primary-foreground shadow-sm transition-all hover:opacity-90 disabled:opacity-50"
                   >
-                    Soumettre la proposition
+                    {submitting ? "Envoi…" : "Soumettre la proposition"}
                   </button>
                 </DialogFooter>
               </form>
@@ -443,25 +456,66 @@ const Propositions = () => {
             </div>
           </div>
 
+          {/* Mes propositions en attente (citoyen connecté) */}
+          {currentUser && currentUser.role === "citizen" && (
+            <div className="mb-8 rounded-2xl border border-civic-yellow/30 bg-civic-yellow-light/30 p-6">
+              <h2 className="mb-3 font-display text-lg font-semibold text-foreground">
+                Mes propositions en attente
+              </h2>
+              <p className="mb-4 text-sm text-muted-foreground">
+                Ces propositions n’ont pas encore de réponse officielle. Elles apparaîtront dans la liste publique une fois qu’un responsable aura publié une réponse.
+              </p>
+              {loadingEnAttente ? (
+                <p className="text-sm text-muted-foreground">Chargement…</p>
+              ) : proposalsEnAttente.length === 0 ? (
+                <p className="text-sm text-muted-foreground">Aucune proposition en attente.</p>
+              ) : (
+                <ul className="space-y-2">
+                  {proposalsEnAttente.map((p) => (
+                    <li key={p.id}>
+                      <Link
+                        to={`/propositions/${p.id}`}
+                        className="block rounded-lg border border-border bg-card px-4 py-3 text-sm font-medium text-foreground transition-colors hover:border-primary/30 hover:bg-primary/5"
+                      >
+                        <span className="line-clamp-1">{p.title}</span>
+                        <span className="mt-1 block text-xs text-muted-foreground">{p.date}</span>
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
+
           {/* Proposals list */}
           <div className="space-y-4">
-            {filtered.map((proposal) => (
+            {loadingProposals ? (
+              <p className="py-12 text-center text-muted-foreground">Chargement des propositions…</p>
+            ) : filtered.length === 0 ? (
+              <div className="rounded-2xl border border-border bg-card p-12 text-center text-muted-foreground">
+                <p className="font-medium">Aucune proposition pour le moment.</p>
+                <p className="mt-1 text-sm">Les données sont chargées depuis la plateforme. Soumettez la première proposition !</p>
+              </div>
+            ) : (
+              filtered.map((proposal) => (
               <div
                 key={proposal.id}
                 className="rounded-2xl border border-border bg-card p-6 transition-all duration-300 hover:border-primary/20 civic-card-shadow"
               >
                 <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-                  <div className="flex-1">
+                  <div className="flex-1 min-w-0">
                     <div className="mb-2 flex flex-wrap items-center gap-2">
                       <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${statusColors[proposal.status] || ""}`}>
                         {proposal.status}
                       </span>
                       <span className="text-xs text-muted-foreground">{proposal.date}</span>
                     </div>
-                    <h3 className="mb-1 font-display text-lg font-semibold text-foreground">{proposal.title}</h3>
-                    <p className="mb-2 text-sm text-muted-foreground">{proposal.problem}</p>
+                    <Link to={`/propositions/${proposal.id}`} className="block group/link">
+                      <h3 className="mb-1 font-display text-lg font-semibold text-foreground group-hover/link:text-primary group-hover/link:underline">{proposal.title}</h3>
+                      <p className="mb-2 text-sm text-muted-foreground line-clamp-2">{proposal.problem}</p>
+                    </Link>
                     <p className="text-sm text-foreground/80">
-                      <span className="font-medium text-primary">💡 Solution :</span> {proposal.solution}
+                      <span className="font-medium text-primary">Solution :</span> {proposal.solution}
                     </p>
                     <div className="mt-3 flex flex-wrap gap-2 text-xs text-muted-foreground">
                       <span className="rounded-md bg-secondary px-2 py-1">{proposal.ministry}</span>
@@ -520,7 +574,8 @@ const Propositions = () => {
                   </div>
                 </div>
               </div>
-            ))}
+            ))
+            )}
           </div>
         </div>
       </section>
